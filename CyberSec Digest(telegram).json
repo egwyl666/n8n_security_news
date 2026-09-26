@@ -1,0 +1,456 @@
+{
+  "name": "CyberSec Digest v4 (Gemini) → Telegram",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 30
+            }
+          ]
+        }
+      },
+      "name": "Каждые 30 минут",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -256,
+        304
+      ],
+      "id": "2cfd4182-3cc8-49f5-8119-bd4c5ee2512d"
+    },
+    {
+      "parameters": {
+        "url": "https://feeds.feedburner.com/TheHackersNews",
+        "options": {}
+      },
+      "name": "The Hacker News",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "880a7866-38e7-4170-b1e5-00171ba7e6ed",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "https://www.bleepingcomputer.com/feed/",
+        "options": {}
+      },
+      "name": "BleepingComputer",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        160
+      ],
+      "id": "9b25a10b-f97a-4370-92bb-ad82f7376c65",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "https://krebsonsecurity.com/feed/",
+        "options": {}
+      },
+      "name": "Krebs on Security",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        304
+      ],
+      "id": "f6a11671-abd0-4372-a1c5-107caf0dd940",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "https://services.nvd.nist.gov/rest/json/cves/2.0",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "pubStartDate",
+              "value": "={{ $now.minus({hours: 2}).toUTC().toISO() }}"
+            },
+            {
+              "name": "pubEndDate",
+              "value": "={{ $now.toUTC().toISO() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "NVD — новые CVE",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        464
+      ],
+      "id": "79308a5b-9acb-4025-bf36-7d02c649f832",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const vulns = $input.first().json.vulnerabilities || [];\nconst out = [];\nfor (const v of vulns) {\n  const c = v.cve;\n  const m = c.metrics || {};\n  const all = [...(m.cvssMetricV40 || []), ...(m.cvssMetricV31 || []), ...(m.cvssMetricV30 || [])];\n  const score = all.length ? Math.max(...all.map(x => x.cvssData.baseScore)) : null;\n  if (score === null || score < 7) continue;\n  const desc = ((c.descriptions || []).find(d => d.lang === 'en') || {}).value || '';\n  out.push({ json: { type: 'cve', source: 'NVD', title: `${c.id} (CVSS ${score})`,\n    link: `https://nvd.nist.gov/vuln/detail/${c.id}`, summary: desc.slice(0, 400), date: c.published } });\n}\nreturn out;"
+      },
+      "name": "CVE: фильтр CVSS ≥ 7",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        464
+      ],
+      "alwaysOutputData": true,
+      "id": "68326ba7-f9d2-49d5-b782-5610b4cebf62"
+    },
+    {
+      "parameters": {
+        "url": "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
+        "options": {}
+      },
+      "name": "CISA KEV",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        608
+      ],
+      "id": "cde747bd-7a13-430c-a96f-d96c5c0a46f4",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const vulns = $input.first().json.vulnerabilities || [];\nconst cutoff = new Date(Date.now() - 3 * 24 * 3600 * 1000);\nreturn vulns\n  .filter(v => new Date(v.dateAdded) >= cutoff)\n  .map(v => ({ json: { type: 'kev', source: 'CISA KEV',\n    title: `${v.cveID} — ${v.vendorProject} ${v.product}`,\n    link: `https://nvd.nist.gov/vuln/detail/${v.cveID}`,\n    summary: v.shortDescription, date: v.dateAdded,\n    extra: `Ransomware: ${v.knownRansomwareCampaignUse} | Дедлайн CISA: ${v.dueDate}` } }));"
+      },
+      "name": "KEV: новые за 3 дня",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        608
+      ],
+      "alwaysOutputData": true,
+      "id": "d2ce3496-9718-4ba7-b774-115888d589d0"
+    },
+    {
+      "parameters": {
+        "jsCode": "const cutoff = Date.now() - 24 * 3600 * 1000;\nconst esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst icons = { news: '📰', cve: '🔥', kev: '🚨' };\nconst out = [];\nfor (const item of $input.all()) {\n  let j = item.json;\n  if (!j.title || j.error) continue; // пустые/ошибочные элементы\n  if (!j.type) {\n    const d = j.isoDate || j.pubDate;\n    if (d && new Date(d).getTime() < cutoff) continue;\n    const hm = String(j.link || '').match(/^https?:\\/\\/(?:www\\.)?([^\\/?#]+)/i);\n    const host = hm ? hm[1] : '';\n    j = { type: 'news', source: host, title: j.title, link: j.link,\n          summary: (j.contentSnippet || '').replace(/\\s+/g, ' ').slice(0, 400), date: d };\n  }\n  const text = `${icons[j.type]} <b>${esc(j.title)}</b>\\n<i>${esc(j.source)}</i>\\n\\n${esc(j.summary)}${j.extra ? '\\n' + esc(j.extra) : ''}\\n\\n<a href=\"${esc(j.link)}\">Читать</a>`;\n  out.push({ json: { ...j, text } });\n}\nreturn out;"
+      },
+      "name": "Нормализация + текст",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        688,
+        304
+      ],
+      "id": "bc6a20df-0e93-40ac-b1b6-43fb6088a87a"
+    },
+    {
+      "parameters": {
+        "operation": "removeItemsSeenInPreviousExecutions",
+        "dedupeValue": "={{  ((($json.title || '') + ' ' + ($json.summary || '')).match(/CVE-\\d{4}-\\d{4,}/) || [$json.link])[0] }}",
+        "options": {}
+      },
+      "name": "Убрать уже отправленное",
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 2,
+      "position": [
+        912,
+        304
+      ],
+      "id": "bc26fe2c-e667-4e04-991c-cbe0b5c884d2"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all().map(i => i.json);\nconst data = items.map(j => ({ type: j.type, source: j.source, title: j.title, link: j.link, summary: j.summary, extra: j.extra || '' }));\nconst now = $now.setZone('Europe/Kyiv').toFormat('dd.MM.yyyy HH:mm');\nconst prompt = `Ти — досвідчений аналітик SOC. Зроби дайджест для Telegram українською мовою.\n\nПоверни СУВОРО JSON виду {\"messages\": [\"...\", \"...\"]}. Кожне повідомлення не довше 3500 символів. Якщо матеріалу багато, розбий на кілька повідомлень за групами. Кожен пункт у списку має бути завершеним — не обривай речення на півслові.\n\nФорматування: лише Telegram HTML — теги <b>, <i>, <code>, <a href=\"...\">. Жодного Markdown, жодних інших тегів. Символи <, >, & поза тегами екрануй.\n\nСтруктура:\n1. Перше повідомлення починається з: \"🛡 <b>Кіберзведення</b> · ${now}\" та рядком підсумків (скільки KEV / CVE / новин).\n2. Групи по порядку, порожні пропускай:\n   🚨 <b>Активно експлуатуються (CISA KEV)</b>\n      🔥 <b>Критичні CVE</b>\n         📰 <b>Новини</b>\n         3. Кожен пункт:\n            🔴/🟠/🟡 (пріоритет для SOC) <b>заголовок українською</b>\n               1–2 речення суті.\n                  <i>Для SOC:</i> конкретна дія — що перевірити, які логи/IOC дивитися, що патчити.\n                     <a href=\"ПОСИЛАННЯ\">Джерело</a>\n                        Між пунктами порожній рядок.\n                        \n                        Правила:\n                        - Не вигадуй факти, версії та IOC — спирайся лише на дані нижче.\n                        - Розкладай строго за полем type: kev → KEV, cve → CVE, news → Новини. Новина, де згадується CVE, все одно залишається в Новинах.\n                        - Ніколи не підставляй CVE-ідентифікатор з одного пункту в інший. Вказуй лише ті CVE, що є в даних цього пункту.\n                        - Якщо кілька пунктів описують одну подію чи одну вразливість — об'єднай їх в один пункт і дай усі посилання.\n                        - CVE-ідентифікатори огортай у <code>.\n                        - Якщо не встигаєш описати всі пункти повністю в межах ліміту символів — краще опиши менше пунктів, але кожен до кінця, ніж обривай текст.\n                        \n                        Дані:\n                        ${JSON.stringify(data)}`;\nreturn [{ json: {\n    body: { contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: 'application/json', temperature: 0.3, maxOutputTokens: 8192 } },\n    fallback: items.map(j => j.text)\n} }];"
+      },
+      "name": "Сборка промпта",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        304
+      ],
+      "id": "7a2caf94-e477-4de5-b4a5-2f8b3d2f19cb"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "name": "Gemini",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1344,
+        304
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 30000,
+      "id": "399e6a04-af36-4e03-b632-fd5d69439db5",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "olXp7zd2BtgzA8uO",
+          "name": "Header Auth account 2"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "let msgs = [];\ntry {\n  const t = $json.candidates[0].content.parts[0].text;\n  msgs = JSON.parse(t).messages;\n} catch (e) {}\nif (!Array.isArray(msgs) || !msgs.length) {\n  // Gemini недоступен или вернул мусор — шлём обычный формат\n  msgs = $('Сборка промпта').first().json.fallback;\n}\nreturn msgs.filter(Boolean).map(m => ({ json: { text: String(m).slice(0, 4000) } }));"
+      },
+      "name": "Разбор ответа",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        304
+      ],
+      "id": "b720097f-66ae-4b7f-9792-2886ca0622ff"
+    },
+    {
+      "parameters": {
+        "chatId": "ТВОЙ_АЙДИ_СЮДА",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "disable_web_page_preview": true,
+          "parse_mode": "HTML"
+        }
+      },
+      "name": "Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1792,
+        304
+      ],
+      "id": "d3da8717-ae43-4312-94af-00413d872e3c",
+      "webhookId": "417ca735-1ec7-49f5-ac40-5d7a5a839ed1",
+      "credentials": {
+        "telegramApi": {
+          "id": "WFJ3z8KclqK0I0Hq",
+          "name": "Telegram account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "numberInputs": 5
+      },
+      "name": "Ждём все источники",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        464,
+        304
+      ],
+      "id": "9d428de0-5cd4-4099-b43d-78bc4aa921fa"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Каждые 30 минут": {
+      "main": [
+        [
+          {
+            "node": "The Hacker News",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "BleepingComputer",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Krebs on Security",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "NVD — новые CVE",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "CISA KEV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "The Hacker News": {
+      "main": [
+        [
+          {
+            "node": "Ждём все источники",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BleepingComputer": {
+      "main": [
+        [
+          {
+            "node": "Ждём все источники",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Krebs on Security": {
+      "main": [
+        [
+          {
+            "node": "Ждём все источники",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "NVD — новые CVE": {
+      "main": [
+        [
+          {
+            "node": "CVE: фильтр CVSS ≥ 7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CVE: фильтр CVSS ≥ 7": {
+      "main": [
+        [
+          {
+            "node": "Ждём все источники",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "CISA KEV": {
+      "main": [
+        [
+          {
+            "node": "KEV: новые за 3 дня",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "KEV: новые за 3 дня": {
+      "main": [
+        [
+          {
+            "node": "Ждём все источники",
+            "type": "main",
+            "index": 4
+          }
+        ]
+      ]
+    },
+    "Нормализация + текст": {
+      "main": [
+        [
+          {
+            "node": "Убрать уже отправленное",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Убрать уже отправленное": {
+      "main": [
+        [
+          {
+            "node": "Сборка промпта",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Сборка промпта": {
+      "main": [
+        [
+          {
+            "node": "Gemini",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini": {
+      "main": [
+        [
+          {
+            "node": "Разбор ответа",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Разбор ответа": {
+      "main": [
+        [
+          {
+            "node": "Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ждём все источники": {
+      "main": [
+        [
+          {
+            "node": "Нормализация + текст",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "af40175c-f5e3-43c6-bf49-163757c6ea4f",
+  "meta": {
+    "instanceId": "908449a9ce43c0f9be9fd01c01e045350241af1a5ad7c39456a9b66e6e88211e"
+  },
+  "nodeGroups": [],
+  "id": "CHZR5l26gqlfc4A6",
+  "tags": []
+}
