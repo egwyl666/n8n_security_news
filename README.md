@@ -1,4 +1,4 @@
-# 🛡 CyberSec Digest — n8n → Telegram
+# CyberSec Digest — n8n → Telegram
 
 > An autonomous SOC-flavored news desk that never sleeps: it watches the wires, filters the noise, asks Gemini to write the briefing, and delivers it straight to your phone.
 
@@ -20,11 +20,11 @@ Read this in: **[English](#english)** · **[Українською](#украї�
 Every run, the workflow:
 
 1. **Collects** from five independent sources in parallel:
-   - 📰 [The Hacker News](https://thehackernews.com) (RSS)
-   - 📰 [BleepingComputer](https://www.bleepingcomputer.com) (RSS)
-   - 📰 [Krebs on Security](https://krebsonsecurity.com) (RSS)
-   - 🔥 [NVD](https://nvd.nist.gov) — freshly published CVEs
-   - 🚨 [CISA KEV](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) — vulnerabilities confirmed as actively exploited in the wild
+   - [The Hacker News](https://thehackernews.com) (RSS)
+   - [BleepingComputer](https://www.bleepingcomputer.com) (RSS)
+   - [Krebs on Security](https://krebsonsecurity.com) (RSS)
+   - [NVD](https://nvd.nist.gov) — freshly published CVEs
+   - [CISA KEV](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) — vulnerabilities confirmed as actively exploited in the wild
 2. **Filters the signal from the noise**: only CVEs with CVSS ≥ 7 survive, KEV entries are limited to the last 3 days, and news older than 24 hours is dropped.
 3. **Normalizes and de-duplicates** everything into one shape, keyed on the CVE ID (or link) so the same story never gets sent twice across runs.
 4. **Asks Gemini** to write the actual digest: strict Telegram-HTML formatting, grouped by severity (KEV → CVE → News), each item with a plain-language summary *and* a concrete "what to check/patch" note for the analyst on shift.
@@ -104,11 +104,11 @@ Schedule (every 30 min)
 На кожному запуску воркфлоу:
 
 1. **Збирає дані** одразу з п'яти незалежних джерел:
-   - 📰 [The Hacker News](https://thehackernews.com) (RSS)
-   - 📰 [BleepingComputer](https://www.bleepingcomputer.com) (RSS)
-   - 📰 [Krebs on Security](https://krebsonsecurity.com) (RSS)
-   - 🔥 [NVD](https://nvd.nist.gov) — щойно опубліковані CVE
-   - 🚨 [CISA KEV](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) — вразливості, що підтверджено активно експлуатуються
+   - [The Hacker News](https://thehackernews.com) (RSS)
+   - [BleepingComputer](https://www.bleepingcomputer.com) (RSS)
+   - [Krebs on Security](https://krebsonsecurity.com) (RSS)
+   - [NVD](https://nvd.nist.gov) — щойно опубліковані CVE
+   - [CISA KEV](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) — вразливості, що підтверджено активно експлуатуються
 2. **Відсіює шум**: залишаються лише CVE з CVSS ≥ 7, записи KEV обмежені останніми 3 днями, а новини старші за 24 години відкидаються.
 3. **Нормалізує та дедублікує** усе до єдиного формату за ключем CVE-ідентифікатора (або посилання), щоб та сама новина не прийшла двічі в різних запусках.
 4. **Звертається до Gemini**, щоб написати сам дайджест: сувора HTML-розмітка Telegram, групування за критичністю (KEV → CVE → Новини), кожен пункт із коротким поясненням суті *та* конкретною порадою для чергового аналітика — що перевірити чи запатчити.
